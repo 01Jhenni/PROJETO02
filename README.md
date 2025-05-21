@@ -1,8 +1,4 @@
-Claro! Aqui está um modelo de `README.md` completo e profissional para o seu projeto:
 
----
-
-```markdown
 # 🗂️ Sistema de Gestão de Arquivos e Atendimento - Clientes e Colaboradores
 
 Este sistema tem como objetivo facilitar o envio de documentos fiscais por parte dos clientes e a gestão dos dados por parte dos colaboradores, garantindo organização, automação de processos, integração via FTP e suporte inteligente com IA.
