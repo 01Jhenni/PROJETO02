@@ -1,61 +1,32 @@
-# 🗂️ Sistema de Gestão de Arquivos e Atendimento - Clientes e Colaboradores
+# 📁 FileFlow Nexus Portal
 
-Este sistema tem como objetivo facilitar o envio de documentos fiscais por parte dos clientes e a gestão dos dados por parte dos colaboradores, garantindo organização, automação de processos, integração via FTP e suporte inteligente com IA.
-
----
-
-## 📌 Funcionalidades
-
-### 👥 Autenticação
-
-* Login com redirecionamento baseado no tipo de usuário:  
-   * **Cliente**: acesso à área de envio de arquivos e dashboard.  
-   * **Colaborador**: acesso à área de análise de importações, chat interno e configurações.
+Sistema completo para **gestão de arquivos fiscais, importações e atendimento** para clientes e colaboradores de escritórios contábeis.
 
 ---
 
-### 🧾 Área do Cliente
+## ✨ Visão Geral
 
-* Escolha da **empresa** para qual os arquivos serão enviados.
-* Upload por tipo de documento:  
-   * **SPED**  
-   * **NFE**  
-   * **CTE**  
-   * **PDF de NFS**  
-   * **NFCE**  
-   * **Planilha**
-* Cada aba muda de cor:  
-   * ✅ Verde: arquivo enviado  
-   * ❌ Vermelho: pendente
-* Envio final via **FTP** com estrutura:
-
-```
-/NOME_EMPRESA/ANO-MES/
-/SPED/
-/NFE/
-/CTE/
-/NFS_PDF/
-/NFCE/
-/PLANILHAS/
-```
-
-* Dashboard com dados financeiros atualizados mensalmente.
-* Bot de suporte com **Inteligência Artificial** (IA) para atendimento automatizado.
+O FileFlow Nexus Portal facilita o envio, organização e acompanhamento de documentos fiscais, além de oferecer dashboards financeiros, registro de importações, chat interno e automações para o time contábil.
 
 ---
+
+## 🚀 Funcionalidades Principais
+
+### 👤 Área do Cliente
+
+- **Upload de Documentos**: Envio de arquivos fiscais por tipo (SPED, NFE, CTE, PDF de NFS, NFCE, Planilhas).
+- **Seleção de Empresa e Mês**: Cliente escolhe para qual empresa e mês está enviando os arquivos.
+- **Status Visual**: Abas coloridas indicam arquivos enviados (✅ verde) ou pendentes (❌ vermelho).
+- **Envio via FTP**: Estrutura automática de pastas por empresa, ano e mês.
+- **Dashboard Financeiro**: Visualização de dados financeiros atualizados mensalmente.
+- **Bot de Suporte com IA**: Atendimento automatizado para dúvidas e suporte.
 
 ### 🧑‍💼 Área do Colaborador
 
-* Visualização e registro das **importações de arquivos** com status:
-  * Importado com sucesso
-  * Erro (com observação)
-  * Pendente
-* **Chat interno e com cliente** estilo WhatsApp.
-* Aba de **configurações**:
-  * Gerenciar empresas
-  * Gerenciar usuários
-  * Gerenciar permissões
-  * Parametrizações do sistema
+- **Gestão de Importações**: Registro, acompanhamento e filtro de importações de arquivos, com status (importado, erro, pendente).
+- **Registro de Erros**: Upload de prints, descrição do erro e notificação por e-mail ao responsável.
+- **Chat Interno e com Cliente**: Comunicação eficiente estilo WhatsApp.
+- **Configurações**: Gerenciamento de empresas, usuários, permissões e parametrizações do sistema.
 
 ---
 
@@ -63,34 +34,33 @@ Este sistema tem como objetivo facilitar o envio de documentos fiscais por parte
 
 | Camada         | Tecnologia                                 |
 | -------------- | ------------------------------------------ |
-| Frontend       | React.js + TailwindCSS                     |
+| Frontend       | React.js, Vite, TailwindCSS                |
 | Backend        | Node.js (Express) ou Python (Flask/Django) |
 | Banco de Dados | PostgreSQL / MySQL                         |
-| Upload FTP     | ftplib (Python) ou basic-ftp (Node.js)     |
+| Upload FTP     | basic-ftp (Node.js) / ftplib (Python)      |
 | Chat           | WebSocket / Socket.IO / Firebase           |
 | Bot IA         | OpenAI API / Rasa / Dialogflow             |
-| Hospedagem     | Docker + VPS / AWS / DigitalOcean          |
+| Hospedagem     | Docker, VPS, AWS, DigitalOcean             |
 
 ---
 
-## 📁 Estrutura de Pastas (FTP)
+## 🗂️ Estrutura de Pastas (FTP)
 
 ```
-📁 /NOME_EMPRESA/
-📁 2025-05/
-📁 SPED/
-📁 NFE/
-📁 CTE/
-📁 NFS_PDF/
-📁 NFCE/
-📁 PLANILHAS/
+/NOME_EMPRESA/ANO-MES/
+  /SPED/
+  /NFE/
+  /CTE/
+  /NFS_PDF/
+  /NFCE/
+  /PLANILHAS/
 ```
 
 ---
 
-## 📊 Banco de Dados (modelo simplificado)
+## 🗄️ Modelo de Banco de Dados (Simplificado)
 
-```
+```sql
 USERS (id, nome, email, senha_hash, tipo, empresa_id)
 EMPRESAS (id, nome, cnpj)
 UPLOADS (id, user_id, empresa_id, tipo_arquivo, data_upload, status, caminho)
@@ -101,14 +71,25 @@ DASHBOARD_DADOS (id, empresa_id, mes, ano, receita, despesa, impostos, etc)
 
 ---
 
-## 🚀 Como Executar o Projeto
+## 📊 Dashboards
 
-1. Clone o repositório
+- **Dashboard do Cliente**: Gráficos de uploads, pendências e dados financeiros por mês.
+- **Dashboard do Colaborador**: Visão geral das importações, erros e status dos arquivos.
+
+---
+
+## ⚡ Como Executar o Projeto
+
+### 1. Clone o repositório
+
 ```bash
 git clone https://github.com/01Jhenni/PROJETO02.git
 ```
 
-2. Instale as dependências
+### 2. Instale as dependências
+
+#### Backend
+
 ```bash
 cd backend
 npm install
@@ -116,34 +97,36 @@ npm install
 pip install -r requirements.txt
 ```
 
-3. Configure o .env com as credenciais do banco e FTP
+#### Frontend
 
-4. Inicie o servidor
 ```bash
+cd frontend
+npm install
+```
+
+### 3. Configure o `.env` com as credenciais do banco e FTP
+
+### 4. Inicie o servidor
+
+```bash
+# Backend
 npm run dev
 # ou
 python app.py
 ```
 
-5. Inicie o frontend
+### 5. Inicie o frontend
+
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
 ---
 
-## ✅ Status do Projeto
-
-🚧 **Em desenvolvimento**  
-📅 Previsão para MVP: **Em definição**
-
----
-
 ## 🤝 Contribuição
 
-Contribuições são bem-vindas! Para contribuir:
+Contribuições são bem-vindas!
 
 1. Fork este repositório
 2. Crie uma branch: `git checkout -b minha-feature`
@@ -155,7 +138,7 @@ Contribuições são bem-vindas! Para contribuir:
 
 ## 📄 Licença
 
-Este projeto está licenciado sob a Licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+Projeto sob Licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
 
 ---
 
@@ -163,5 +146,9 @@ Este projeto está licenciado sob a Licença MIT. Veja o arquivo `LICENSE` para 
 
 Desenvolvido por **Jhennifer Ferreira Nascimento**  
 📧 Email: [seu-email@example.com]  
-🔗 GitHub: [https://github.com/01Jhenni](https://github.com/01Jhenni)  
-📱 TikTok: @01jhenni
+🔗 GitHub: [@01Jhenni](https://github.com/01Jhenni)  
+📱 TikTok: [@01jhenni](https://www.tiktok.com/@01jhenni)
+
+---
+
+> _Sinta-se à vontade para sugerir melhorias, abrir issues ou contribuir com novas funcionalidades!_
