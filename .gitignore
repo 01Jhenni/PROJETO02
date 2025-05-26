@@ -34,3 +34,7 @@ yarn-error.log*
 
 # Vite
 *.local
+
+# Project specific
+*.zip
+fileflow-nexus-portal.zip
