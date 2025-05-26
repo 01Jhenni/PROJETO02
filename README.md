@@ -1,4 +1,4 @@
-# 📁 FileFlow Nexus Portal
+# 📁 FiscAI
 
 Sistema completo para **gestão de arquivos fiscais, importações e atendimento** para clientes e colaboradores de escritórios contábeis.
 
@@ -6,7 +6,7 @@ Sistema completo para **gestão de arquivos fiscais, importações e atendimento
 
 ## ✨ Visão Geral
 
-O FileFlow Nexus Portal facilita o envio, organização e acompanhamento de documentos fiscais, além de oferecer dashboards financeiros, registro de importações, chat interno e automações para o time contábil.
+O FiscAI facilita o envio, organização e acompanhamento de documentos fiscais, além de oferecer dashboards financeiros, registro de importações, chat interno e automações para o time contábil.
 
 ---
 
@@ -122,19 +122,8 @@ cd frontend
 npm run dev
 ```
 
----
 
-## 🤝 Contribuição
 
-Contribuições são bem-vindas!
-
-1. Fork este repositório
-2. Crie uma branch: `git checkout -b minha-feature`
-3. Faça commit das alterações: `git commit -m 'feat: minha nova feature'`
-4. Push na branch: `git push origin minha-feature`
-5. Abra um Pull Request
-
----
 
 ## 📄 Licença
 
@@ -145,7 +134,6 @@ Projeto sob Licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
 ## 📞 Contato
 
 Desenvolvido por **Jhennifer Ferreira Nascimento**  
-📧 Email: [seu-email@example.com]  
 🔗 GitHub: [@01Jhenni](https://github.com/01Jhenni)  
 📱 TikTok: [@01jhenni](https://www.tiktok.com/@01jhenni)
 
