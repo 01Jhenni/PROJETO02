@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard, Upload, DollarSign, MessageSquare,
-  Database, Users, Settings, LogOut, Menu, X
+  Database, Users, Settings, LogOut, Menu, X, Server
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -52,6 +52,11 @@ const Layout: React.FC<LayoutProps> = ({ children, userType }) => {
     },
     { to: '/staff/chat', label: 'Conversas', icon: <MessageSquare className="h-5 w-5" /> },
     { to: '/staff/configuracoes', label: 'Configurações', icon: <Settings className="h-5 w-5" /> },
+    {
+      title: "Configurações FTP",
+      href: "/admin/ftp-configurations",
+      icon: Server,
+    },
   ];
 
   const links = userType === 'client' ? clientLinks : staffLinks;

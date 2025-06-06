@@ -2,613 +2,371 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '../../contexts/AuthContext';
-import { Building, Upload as UploadIcon, CheckCircle, AlertCircle, FilePlus2, Calendar, BarChart2, FileSpreadsheet } from 'lucide-react';
+import { Building, Upload as UploadIcon, CheckCircle, AlertCircle, FilePlus2, Calendar } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Client } from 'basic-ftp';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import UploadHistory from "@/components/UploadHistory";
 
-interface Company {
-  id: string;
-  name: string;
-}
-
-interface FileTypeStatus {
-  id: string;
-  name: string;
-  description: string;
-  uploaded: boolean;
-  date: Date | null;
-  files: File[];
-  month?: string; // Mês de referência do arquivo
-}
-
-interface ReportType {
-  id: string;
-  name: string;
-  description: string;
-  uploaded: boolean;
-  date: Date | null;
-  file: File | null;
-  month: string | null;
-  type: 'dashboard' | 'financial';
+interface UploadStatus {
+  companyId: string;
+  documentTypeId: string;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  error?: string;
+  file?: File;
+  month?: string;
 }
 
 const Upload = () => {
   const { user } = useAuth();
-  const [selectedCompany, setSelectedCompany] = useState<string>(user?.companyId || '');
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [activeTab, setActiveTab] = useState<string>("files");
-  const [fileTypes, setFileTypes] = useState<FileTypeStatus[]>([
-    { 
-      id: 'sped', 
-      name: 'SPED', 
-      description: 'Arquivos SPED Fiscal e Contribuições', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-    { 
-      id: 'nfe', 
-      name: 'NFE', 
-      description: 'Notas Fiscais Eletrônicas', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-    { 
-      id: 'cte', 
-      name: 'CTE', 
-      description: 'Conhecimentos de Transporte Eletrônico', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-    { 
-      id: 'nfs', 
-      name: 'NFS', 
-      description: 'Notas Fiscais de Serviço (PDFs)', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-    { 
-      id: 'nfce', 
-      name: 'NFCE', 
-      description: 'Notas Fiscais de Consumidor Eletrônica', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-    { 
-      id: 'planilha', 
-      name: 'Planilhas', 
-      description: 'Planilhas Excel de controle', 
-      uploaded: false, 
-      date: null, 
-      files: [],
-      month: null 
-    },
-  ]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [companies] = useState<Company[]>([
-    { id: 'emp1', name: 'Empresa Teste' },
-    { id: 'emp2', name: 'Outra Empresa' },
-  ]);
+  const supabase = useSupabaseClient();
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [selectedDocumentType, setSelectedDocumentType] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatuses, setUploadStatuses] = useState<UploadStatus[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const [reportTypes, setReportTypes] = useState<ReportType[]>([
-    {
-      id: 'dashboard-report',
-      name: 'Relatório do Dashboard',
-      description: 'Planilha Excel com dados para atualização do dashboard principal',
-      uploaded: false,
-      date: null,
-      file: null,
-      month: null,
-      type: 'dashboard'
-    },
-    {
-      id: 'financial-report',
-      name: 'Relatório Financeiro',
-      description: 'Planilha Excel com dados financeiros para atualização do dashboard financeiro',
-      uploaded: false,
-      date: null,
-      file: null,
-      month: null,
-      type: 'financial'
-    }
-  ]);
+  const handleFileSelect = async (companyId: string, documentTypeId: string, file: File) => {
+    // Validate file extension
+    const documentType = user?.companies
+      .find(c => c.id === companyId)
+      ?.documentTypes.find(dt => dt.id === documentTypeId);
 
-  // Função para gerar lista de meses disponíveis (últimos 12 meses)
-  const getAvailableMonths = () => {
-    const months = [];
-    const now = new Date();
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStr = date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-      const monthValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      months.push({ label: monthStr, value: monthValue });
-    }
-    return months;
-  };
+    if (!documentType) return;
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, typeId: string) => {
-    if (event.target.files && event.target.files.length > 0) {
-      const files = Array.from(event.target.files);
-      
-      // Verificar se é um arquivo Excel
-      const isExcel = files.some(file => 
-        file.name.endsWith('.xlsx') || 
-        file.name.endsWith('.xls')
-      );
-
-      if (isExcel) {
-        // Se for Excel, atualizar o mês de referência
-        setFileTypes(prev => prev.map(type => 
-          type.id === typeId ? 
-          { 
-            ...type, 
-            uploaded: true, 
-            date: new Date(), 
-            files,
-            month: selectedMonth
-          } : type
-        ));
-
-        // Notificar que um novo relatório Excel foi carregado
-        toast({
-          title: "Relatório Excel carregado",
-          description: "O dashboard será atualizado com os novos dados após o processamento.",
-        });
-      } else {
-        // Para outros tipos de arquivo
-        setFileTypes(prev => prev.map(type => 
-          type.id === typeId ? 
-          { 
-            ...type, 
-            uploaded: true, 
-            date: new Date(), 
-            files,
-            month: selectedMonth
-          } : type
-        ));
-
-        toast({
-          title: "Arquivos selecionados",
-          description: `${files.length} arquivo(s) selecionado(s) para ${fileTypes.find(t => t.id === typeId)?.name}`,
-        });
-      }
-    }
-  };
-
-  const handleReportChange = (event: React.ChangeEvent<HTMLInputElement>, reportId: string) => {
-    if (event.target.files && event.target.files.length > 0) {
-      const file = event.target.files[0];
-      
-      // Verificar se é um arquivo Excel
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        setReportTypes(prev => prev.map(report => 
-          report.id === reportId ? 
-          { 
-            ...report, 
-            uploaded: true, 
-            date: new Date(), 
-            file,
-            month: selectedMonth
-          } : report
-        ));
-
-        const reportType = reportTypes.find(r => r.id === reportId);
-        toast({
-          title: "Relatório carregado",
-          description: `O dashboard ${reportType?.type === 'dashboard' ? 'principal' : 'financeiro'} será atualizado após o processamento.`,
-        });
-      } else {
-        toast({
-          title: "Formato inválido",
-          description: "Por favor, selecione um arquivo Excel (.xlsx ou .xls)",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedCompany) {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    if (!fileExtension || !documentType.allowedExtensions.includes(fileExtension)) {
       toast({
-        title: "Selecione uma empresa",
-        description: "É necessário selecionar uma empresa antes de enviar os arquivos",
-        variant: "destructive",
+        title: "Tipo de arquivo inválido",
+        description: `Este documento aceita apenas os formatos: ${documentType.allowedExtensions.join(', ')}`,
+        variant: "destructive"
       });
       return;
     }
 
-    const hasAnyFiles = fileTypes.some(type => type.uploaded);
-    if (!hasAnyFiles) {
-      toast({
-        title: "Nenhum arquivo selecionado",
-        description: "Por favor, selecione ao menos um arquivo para enviar",
-        variant: "destructive",
-      });
-      return;
-    }
+    setSelectedFile(file);
+    setSelectedCompany(companyId);
+    setSelectedDocumentType(documentTypeId);
+    setSelectedMonth(new Date().toLocaleString('pt-BR', { month: 'long' }));
 
-    setIsSubmitting(true);
-    
+    setUploadStatuses(prev => {
+      const existing = prev.find(s => s.companyId === companyId && s.documentTypeId === documentTypeId);
+      if (existing) {
+        return prev.map(s => 
+          s.companyId === companyId && s.documentTypeId === documentTypeId
+            ? { ...s, file, status: 'pending' }
+            : s
+        );
+      }
+      return [...prev, { companyId, documentTypeId, file, status: 'pending' }];
+    });
+  };
+
+  const handleMonthSelect = (companyId: string, documentTypeId: string, month: string) => {
+    setSelectedMonth(month);
+    setUploadStatuses(prev => 
+      prev.map(s => 
+        s.companyId === companyId && s.documentTypeId === documentTypeId
+          ? { ...s, month }
+          : s
+      )
+    );
+  };
+
+  const uploadToFTP = async (status: UploadStatus) => {
+    if (!status.file || !status.month) return;
+
+    const company = user?.companies.find(c => c.id === status.companyId);
+    const documentType = company?.documentTypes.find(dt => dt.id === status.documentTypeId);
+    if (!company || !documentType) return;
+
     try {
-      // Simulando envio para o servidor
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Verificar se há arquivos Excel para atualizar o dashboard
-      const hasExcelFiles = fileTypes.some(type => 
-        type.uploaded && 
-        type.files.some(file => 
-          file.name.endsWith('.xlsx') || 
-          file.name.endsWith('.xls')
-        )
-      );
-
-      if (hasExcelFiles) {
-        // Notificar que o dashboard será atualizado
-        toast({
-          title: "Arquivos enviados com sucesso!",
-          description: "O dashboard será atualizado com os novos dados após o processamento.",
-        });
-      } else {
-        toast({
-          title: "Arquivos enviados com sucesso!",
-          description: "Seus arquivos foram recebidos e estão sendo processados.",
-        });
-      }
-      
-      // Reset dos campos após envio
-      setFileTypes(prev => prev.map(type => ({ 
-        ...type, 
-        files: [],
-        uploaded: false,
-        date: null,
-        month: null
-      })));
-    } catch (error) {
-      toast({
-        title: "Erro ao enviar arquivos",
-        description: "Ocorreu um erro durante o envio. Tente novamente.",
-        variant: "destructive",
+      // Converter arquivo para base64
+      const fileContent = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(status.file!);
       });
-    } finally {
-      setIsSubmitting(false);
+
+      // Chamar a função Edge
+      const { data, error } = await supabase.functions.invoke('ftp-upload', {
+        body: {
+          company_id: status.companyId,
+          document_type_id: status.documentTypeId,
+          file_name: status.file!.name,
+          file_content: fileContent,
+          month: status.month
+        }
+      });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Erro no upload:', error);
+      throw error;
     }
   };
 
-  const handleReportSubmit = async () => {
-    const hasAnyReports = reportTypes.some(report => report.uploaded);
-    if (!hasAnyReports) {
+  const handleUpload = async () => {
+    if (!selectedCompany || !selectedDocumentType || !selectedMonth) {
       toast({
-        title: "Nenhum relatório selecionado",
-        description: "Por favor, selecione pelo menos um relatório para enviar",
+        title: "Erro",
+        description: "Por favor, preencha todos os campos obrigatórios",
         variant: "destructive",
       });
       return;
     }
 
-    setIsSubmitting(true);
-    
-    try {
-      // Simulando envio para o servidor
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Notificar sobre atualização dos dashboards
-      const dashboardReport = reportTypes.find(r => r.id === 'dashboard-report' && r.uploaded);
-      const financialReport = reportTypes.find(r => r.id === 'financial-report' && r.uploaded);
+    let uploadData: { id: string } | null = null;
 
-      if (dashboardReport && financialReport) {
-        toast({
-          title: "Relatórios enviados com sucesso!",
-          description: "Ambos os dashboards serão atualizados após o processamento.",
-        });
-      } else if (dashboardReport) {
-        toast({
-          title: "Relatório enviado com sucesso!",
-          description: "O dashboard principal será atualizado após o processamento.",
-        });
-      } else if (financialReport) {
-        toast({
-          title: "Relatório enviado com sucesso!",
-          description: "O dashboard financeiro será atualizado após o processamento.",
-        });
+    try {
+      // Criar registro do upload no banco de dados
+      const { data, error: uploadError } = await supabase
+        .from('uploads')
+        .insert({
+          user_id: user?.id,
+          company_id: selectedCompany,
+          document_type_id: selectedDocumentType,
+          file_name: selectedFile?.name,
+          file_size: selectedFile?.size,
+          month: selectedMonth,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (uploadError) throw uploadError;
+      uploadData = data;
+
+      // Atualizar status para processando
+      await supabase
+        .from('uploads')
+        .update({ status: 'processing' })
+        .eq('id', uploadData.id);
+
+      // Upload para o FTP
+      const response = await fetch('/functions/v1/ftp-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
+          file: await fileToBase64(selectedFile!),
+          fileName: selectedFile?.name,
+          companyId: selectedCompany,
+          documentTypeId: selectedDocumentType,
+          month: selectedMonth,
+          uploadId: uploadData.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao fazer upload do arquivo');
       }
-      
-      // Reset dos campos após envio
-      setReportTypes(prev => prev.map(report => ({ 
-        ...report, 
-        uploaded: false,
-        date: null,
-        file: null,
-        month: null
-      })));
-    } catch (error) {
+
+      // Atualizar status para concluído
+      await supabase
+        .from('uploads')
+        .update({ status: 'completed' })
+        .eq('id', uploadData.id);
+
       toast({
-        title: "Erro ao enviar relatórios",
-        description: "Ocorreu um erro durante o envio. Tente novamente.",
+        title: "Upload concluído",
+        description: "O arquivo foi enviado com sucesso",
+      });
+
+      // Limpar formulário
+      setSelectedFile(null);
+      setSelectedCompany('');
+      setSelectedDocumentType('');
+      setSelectedMonth('');
+    } catch (error) {
+      console.error('Erro no upload:', error);
+      
+      // Atualizar status para erro
+      if (uploadData?.id) {
+        await supabase
+          .from('uploads')
+          .update({ 
+            status: 'error',
+            error_message: error instanceof Error ? error.message : 'Erro desconhecido',
+          })
+          .eq('id', uploadData.id);
+      }
+
+      toast({
+        title: "Erro no upload",
+        description: error instanceof Error ? error.message : "Ocorreu um erro ao fazer o upload do arquivo",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
+
+  // Função auxiliar para converter File para Base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          // Remove o prefixo "data:application/pdf;base64," do resultado
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        } else {
+          reject(new Error('Erro ao converter arquivo para base64'));
+        }
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  if (!user) return null;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Upload de Arquivos</h1>
-      
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <div className="container mx-auto py-6 space-y-6">
+      <Tabs defaultValue="upload" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="files" className="flex items-center gap-2">
-            <FilePlus2 className="h-4 w-4" />
-            Arquivos
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4" />
-            Relatórios
-          </TabsTrigger>
+          <TabsTrigger value="upload">Upload de Arquivos</TabsTrigger>
+          <TabsTrigger value="history">Histórico</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="files">
-          <div className="bg-white rounded-lg p-6 shadow-sm border">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                  <Building className="h-4 w-4" />
-                  Selecione a empresa
-                </label>
-                
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md"
+        <TabsContent value="upload">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload de Arquivos</CardTitle>
+              <CardDescription>
+                Selecione a empresa e faça o upload dos documentos necessários
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-6">
+                <Label htmlFor="company">Empresa</Label>
+                <Select
                   value={selectedCompany}
-                  onChange={(e) => setSelectedCompany(e.target.value)}
-                  disabled={!!user?.companyId}
+                  onValueChange={setSelectedCompany}
                 >
-                  <option value="">Selecionar empresa...</option>
-                  {companies.map(company => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="company" className="w-full">
+                    <SelectValue placeholder="Selecione uma empresa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {user.companies.map(company => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Mês de referência
-                </label>
-                
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
+              {selectedCompany && (
+                <Tabs defaultValue={user.companies.find(c => c.id === selectedCompany)?.documentTypes[0]?.id}>
+                  <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+                    {user.companies
+                      .find(c => c.id === selectedCompany)
+                      ?.documentTypes.map(docType => (
+                        <TabsTrigger key={docType.id} value={docType.id}>
+                          {docType.name}
+                        </TabsTrigger>
+                      ))}
+                  </TabsList>
+
+                  {user.companies
+                    .find(c => c.id === selectedCompany)
+                    ?.documentTypes.map(docType => (
+                      <TabsContent key={docType.id} value={docType.id}>
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>{docType.name}</CardTitle>
+                            <CardDescription>{docType.description}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div>
+                                <Label>Mês de Referência</Label>
+                                <Select
+                                  onValueChange={(value) => handleMonthSelect(selectedCompany, docType.id, value)}
+                                  value={selectedMonth}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione o mês" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: 12 }, (_, i) => {
+                                      const date = new Date();
+                                      date.setMonth(i);
+                                      return (
+                                        <SelectItem key={i} value={date.toLocaleString('pt-BR', { month: 'long' })}>
+                                          {date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <Label>Arquivo</Label>
+                                <div className="mt-2">
+                                  <input
+                                    type="file"
+                                    accept={docType.allowedExtensions.map(ext => `.${ext}`).join(',')}
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleFileSelect(selectedCompany, docType.id, file);
+                                    }}
+                                    className="hidden"
+                                    id={`file-${docType.id}`}
+                                  />
+                                  <Label
+                                    htmlFor={`file-${docType.id}`}
+                                    className="flex items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50"
+                                  >
+                                    <div className="flex flex-col items-center">
+                                      <FilePlus2 className="h-8 w-8 mb-2" />
+                                      <span>Clique para selecionar o arquivo</span>
+                                      <span className="text-sm text-muted-foreground">
+                                        Formatos aceitos: {docType.allowedExtensions.join(', ')}
+                                      </span>
+                                    </div>
+                                  </Label>
+                                </div>
+                              </div>
+
+                              {selectedFile && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <FilePlus2 className="h-4 w-4" />
+                                  <span>
+                                    {selectedFile.name}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    ))}
+                </Tabs>
+              )}
+
+              <div className="mt-6 flex justify-end">
+                <Button
+                  onClick={handleUpload}
+                  disabled={isUploading || !selectedFile}
                 >
-                  {getAvailableMonths().map(month => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </select>
+                  {isUploading ? 'Enviando...' : 'Enviar Arquivo'}
+                </Button>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {fileTypes.map((fileType) => (
-                <Card 
-                  key={fileType.id} 
-                  className={`border ${fileType.uploaded ? 'border-green-500 bg-green-50' : 'border-red-200 bg-red-50'}`}
-                >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex justify-between items-center">
-                      {fileType.name}
-                      {fileType.uploaded ? 
-                        <CheckCircle className="h-5 w-5 text-green-500" /> : 
-                        <AlertCircle className="h-5 w-5 text-red-500" />
-                      }
-                    </CardTitle>
-                    <CardDescription>{fileType.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {fileType.uploaded ? (
-                        <div>
-                          <div className="mb-2 text-sm text-gray-500">
-                            {fileType.files.length} arquivo(s) selecionado(s)
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Data: {fileType.date?.toLocaleDateString()}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-red-500">
-                          Pendente
-                        </div>
-                      )}
-                      
-                      <div>
-                        <Button 
-                          variant={fileType.uploaded ? "outline" : "default"} 
-                          className="w-full flex items-center gap-2"
-                          asChild
-                        >
-                          <label>
-                            <input 
-                              type="file" 
-                              className="hidden" 
-                              multiple 
-                              onChange={(e) => handleFileChange(e, fileType.id)} 
-                              disabled={!selectedCompany}
-                            />
-                            <FilePlus2 className="h-4 w-4" />
-                            {fileType.uploaded ? "Trocar arquivos" : "Selecionar arquivos"}
-                          </label>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="mt-8">
-              <Button 
-                onClick={handleSubmit} 
-                className="w-full md:w-auto flex items-center gap-2"
-                disabled={isSubmitting || !selectedCompany}
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    <span>Enviando...</span>
-                  </div>
-                ) : (
-                  <>
-                    <UploadIcon className="h-5 w-5" />
-                    Enviar Arquivos
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </TabsContent>
-
-        <TabsContent value="reports">
-          <div className="bg-white rounded-lg p-6 shadow-sm border">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                  <Building className="h-4 w-4" />
-                  Selecione a empresa
-                </label>
-                
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  value={selectedCompany}
-                  onChange={(e) => setSelectedCompany(e.target.value)}
-                  disabled={!!user?.companyId}
-                >
-                  <option value="">Selecionar empresa...</option>
-                  {companies.map(company => (
-                    <option key={company.id} value={company.id}>
-                      {company.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Mês de referência
-                </label>
-                
-                <select 
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                >
-                  {getAvailableMonths().map(month => (
-                    <option key={month.value} value={month.value}>
-                      {month.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {reportTypes.map((report) => (
-                <Card 
-                  key={report.id} 
-                  className={`border ${report.uploaded ? 'border-green-500 bg-green-50' : 'border-red-200 bg-red-50'}`}
-                >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex justify-between items-center">
-                      {report.name}
-                      {report.uploaded ? 
-                        <CheckCircle className="h-5 w-5 text-green-500" /> : 
-                        <AlertCircle className="h-5 w-5 text-red-500" />
-                      }
-                    </CardTitle>
-                    <CardDescription>{report.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {report.uploaded ? (
-                        <div>
-                          <div className="mb-2 text-sm text-gray-500">
-                            Arquivo: {report.file?.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Data: {report.date?.toLocaleDateString()}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Mês: {new Date(report.month || '').toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-red-500">
-                          Pendente
-                        </div>
-                      )}
-                      
-                      <div>
-                        <Button 
-                          variant={report.uploaded ? "outline" : "default"} 
-                          className="w-full flex items-center gap-2"
-                          asChild
-                        >
-                          <label>
-                            <input 
-                              type="file" 
-                              className="hidden" 
-                              accept=".xlsx,.xls"
-                              onChange={(e) => handleReportChange(e, report.id)} 
-                              disabled={!selectedCompany}
-                            />
-                            <FileSpreadsheet className="h-4 w-4" />
-                            {report.uploaded ? "Trocar relatório" : "Selecionar relatório"}
-                          </label>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="mt-8">
-              <Button 
-                onClick={handleReportSubmit} 
-                className="w-full md:w-auto flex items-center gap-2"
-                disabled={isSubmitting || !selectedCompany}
-              >
-                {isSubmitting ? (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    <span>Enviando...</span>
-                  </div>
-                ) : (
-                  <>
-                    <UploadIcon className="h-5 w-5" />
-                    Enviar Relatórios
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
+        <TabsContent value="history">
+          <UploadHistory />
         </TabsContent>
       </Tabs>
     </div>

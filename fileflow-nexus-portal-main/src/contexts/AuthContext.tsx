@@ -1,19 +1,36 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = "https://zssdfngiyvxrmlwssvoy.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2RmbmdpeXZ4cm1sd3Nzdm95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4NDczMzYsImV4cCI6MjA2MzQyMzMzNn0.rEZwsG_hFy7ikxfUd2nBxqz2clQtuds2Ja5MM9SwQtY";
+const supabaseUrl = "https://pfkhlrctrevcibkawqvy.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBma2hscmN0cmV2Y2lia2F3cXZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMTA5ODAsImV4cCI6MjA2NDc4Njk4MH0.U_c__wY99tU4Zo1g3rMVwyo_btM7LpAF3612gB31064";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 type UserType = "client" | "staff";
+
+interface DocumentType {
+  id: string;
+  name: string;
+  description: string;
+  allowedExtensions: string[];
+  ftpConfig: {
+    host: string;
+    username: string;
+    password: string;
+  };
+}
+
+interface Company {
+  id: string;
+  name: string;
+  documentTypes: DocumentType[];
+}
 
 interface User {
   id: string;
   name: string;
   email: string;
   type: UserType;
-  companyId?: string;
-  companyName?: string;
+  companies: Company[];
 }
 
 interface AuthContextType {
@@ -29,7 +46,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
@@ -38,13 +55,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Simular verificação de autenticação
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
-    } else {
-      // Opcional: verificar sessão do Supabase (ex: supabase.auth.getSession())
     }
     setIsLoading(false);
   }, []);
@@ -52,19 +66,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Integração com Supabase: chama a autenticação (signInWithPassword) e, se sucesso, obtém o usuário (ou dados do usuário) e armazena em localStorage.
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        console.error("Erro de login (Supabase):", error);
-        throw new Error(error.message);
-      }
-      // Exemplo: se a resposta do Supabase retornar um usuário (ou dados do usuário) com um campo "type" (ou "role"), use-o para montar o objeto "User" (ou use um mapeamento).
-      // Aqui, para fins de exemplo, se o email contiver "cliente" ou "staff", atribuímos um tipo (client ou staff) e um nome fictício.
-      let tipo: UserType = email.includes("cliente") ? "client" : "staff";
-      let nome = tipo === "client" ? "Cliente Teste" : "Colaborador Teste";
-      let mockUser: User = { id: (data?.user?.id || "c1"), name: nome, email, type: tipo, companyId: tipo === "client" ? "emp1" : undefined, companyName: tipo === "client" ? "Empresa Teste" : undefined };
-      localStorage.setItem("user", JSON.stringify(mockUser));
-      setUser(mockUser);
+      if (error) throw error;
+
+      // Fetch user data including companies and document types
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select(`
+          id,
+          name,
+          email,
+          type,
+          user_companies (
+            company:companies (
+              id,
+              name,
+              company_document_types (
+                document_type:document_types (
+                  id,
+                  name,
+                  description,
+                  allowed_extensions,
+                  ftp_config
+                )
+              )
+            )
+          )
+        `)
+        .eq('id', data.user.id)
+        .single();
+
+      if (userError) throw userError;
+
+      // Transform the data to match our User interface
+      const transformedUser: User = {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        type: userData.type,
+        companies: userData.user_companies.map((uc: any) => ({
+          id: uc.company.id,
+          name: uc.company.name,
+          documentTypes: uc.company.company_document_types.map((cdt: any) => ({
+            id: cdt.document_type.id,
+            name: cdt.document_type.name,
+            description: cdt.document_type.description,
+            allowedExtensions: cdt.document_type.allowed_extensions,
+            ftpConfig: cdt.document_type.ftp_config
+          }))
+        }))
+      };
+
+      localStorage.setItem("user", JSON.stringify(transformedUser));
+      setUser(transformedUser);
     } catch (error) {
       console.error("Erro no login:", error);
       throw error;
@@ -73,10 +127,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-    // Opcional: chamar supabase.auth.signOut() para encerrar a sessão no Supabase.
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem("user");
+      setUser(null);
+    } catch (error) {
+      console.error("Erro no logout:", error);
+      throw error;
+    }
   };
 
   return (
